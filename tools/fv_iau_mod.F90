@@ -30,20 +30,20 @@
 !-------------------------------------------------------------------------------
 
 #ifdef OVERLOAD_R4
-#define _GET_VAR1 get_var1_real 
+#define _GET_VAR1 get_var1_real
 #else
 #define _GET_VAR1 get_var1_double
 #endif
 
 module fv_iau_mod
 
-  use fms_mod,             only: file_exist
+  use fms2_io_mod,         only: file_exists
   use mpp_mod,             only: mpp_error, FATAL, NOTE, mpp_pe
   use mpp_domains_mod,     only: domain2d
 
-  use constants_mod,       only: pi=>pi_8 
+  use constants_mod,       only: pi=>pi_8
   use fv_arrays_mod,       only: fv_atmos_type,       &
-                                 fv_grid_type,        & 
+                                 fv_grid_type,        &
                                  fv_grid_bounds_type, &
                                  R_GRID
   use fv_mp_mod,           only: is_master
@@ -186,7 +186,7 @@ subroutine IAU_initialize (IPD_Control, IAU_Data,Init_parm)
     npz = IPD_Control%levs
     fname = 'INPUT/'//trim(IPD_Control%iau_inc_files(1))
 
-    if( file_exist(fname) ) then
+    if( file_exists(fname) ) then
       call open_ncfile( fname, ncid )        ! open the file
       call get_ncdim1( ncid, 'lon',   im)
       call get_ncdim1( ncid, 'lat',   jm)
@@ -209,7 +209,7 @@ subroutine IAU_initialize (IPD_Control, IAU_Data,Init_parm)
 
       ! Convert to radians
       do i=1,im
-        lon(i) = lon(i) * deg2rad 
+        lon(i) = lon(i) * deg2rad
       enddo
       do j=1,jm
         lat(j) = lat(j) * deg2rad
@@ -237,7 +237,7 @@ subroutine IAU_initialize (IPD_Control, IAU_Data,Init_parm)
         agrid)
     deallocate ( lon, lat,agrid )
 
-   
+
     allocate(IAU_Data%ua_inc(is:ie, js:je, km))
     allocate(IAU_Data%va_inc(is:ie, js:je, km))
     allocate(IAU_Data%temp_inc(is:ie, js:je, km))
@@ -253,10 +253,11 @@ subroutine IAU_initialize (IPD_Control, IAU_Data,Init_parm)
     allocate (iau_state%inc1%tracer_inc(is:ie, js:je, km,ntracers))
     iau_state%hr1=IPD_Control%iaufhrs(1)
     iau_state%wt = 1.0 ! IAU increment filter weights (default 1.0)
+    iau_state%wt_normfact = 1.0
     if (IPD_Control%iau_filter_increments) then
        ! compute increment filter weights, sum to obtain normalization factor
        dtp=IPD_control%dtp
-       nstep = 0.5*IPD_Control%iau_delthrs*3600/dtp 
+       nstep = 0.5*IPD_Control%iau_delthrs*3600/dtp
        ! compute normalization factor for filter weights
        normfact = 0.
        do k=1,2*nstep+1
@@ -293,31 +294,36 @@ subroutine IAU_initialize (IPD_Control, IAU_Data,Init_parm)
 end subroutine IAU_initialize
 
 subroutine getiauforcing(IPD_Control,IAU_Data)
-        
-   implicit none 
+
+   implicit none
    type (IPD_control_type), intent(in) :: IPD_Control
    type(IAU_external_data_type),  intent(inout) :: IAU_Data
    real(kind=kind_phys) t1,t2,sx,wx,wt,dtp
-   integer n,i,j,k,sphum,kstep,nstep
-  
+   integer n,i,j,k,sphum,kstep,nstep,itnext
+
    IAU_Data%in_interval=.false.
    if (nfiles.LE.0) then
        return
    endif
 
-   t1=iau_state%hr1 - IPD_Control%iau_delthrs*0.5
-   t2=iau_state%hr1 + IPD_Control%iau_delthrs*0.5
+   if (nfiles .eq. 1) then 
+       t1 = IPD_Control%iaufhrs(1)-0.5*IPD_Control%iau_delthrs
+       t2 = IPD_Control%iaufhrs(1)+0.5*IPD_Control%iau_delthrs
+   else
+       t1 = IPD_Control%iaufhrs(1)
+       t2 = IPD_Control%iaufhrs(nfiles)
+   endif
    if (IPD_Control%iau_filter_increments) then
       ! compute increment filter weight
-      ! t1 beginning of window, t2 end of window
+      ! t1 is beginning of window, t2 end of window
       ! IPD_Control%fhour current time
       ! in window kstep=-nstep,nstep (2*nstep+1 total)
       ! time step IPD_control%dtp
       dtp=IPD_control%dtp
-      nstep = 0.5*IPD_Control%iau_delthrs*3600/dtp 
+      nstep = 0.5*IPD_Control%iau_delthrs*3600/dtp
       ! compute normalized filter weight
-      kstep = (IPD_Control%fhour-(t1+IPD_Control%iau_delthrs*0.5))*3600./dtp
-      if (kstep .ge. -nstep .and. kstep .le. nstep) then
+      kstep = ((IPD_Control%fhour-t1) - 0.5*IPD_Control%iau_delthrs)*3600./dtp
+      if (IPD_Control%fhour >= t1 .and. IPD_Control%fhour < t2) then
          sx     = acos(-1.)*kstep/nstep
          wx     = acos(-1.)*kstep/(nstep+1)
          if (kstep .ne. 0) then
@@ -326,7 +332,7 @@ subroutine getiauforcing(IPD_Control,IAU_Data)
             wt = 1.
          endif
          iau_state%wt = iau_state%wt_normfact*wt
-         if (is_master()) print *,'filter wt',kstep,IPD_Control%fhour,iau_state%wt
+         !if (is_master()) print *,'kstep,t1,t,t2,filter wt=',kstep,t1,IPD_Control%fhour,t2,iau_state%wt/iau_state%wt_normfact
       else
          iau_state%wt = 0.
       endif
@@ -338,33 +344,34 @@ subroutine getiauforcing(IPD_Control,IAU_Data)
       if ( IPD_Control%fhour < t1 .or. IPD_Control%fhour >= t2 ) then
 !         if (is_master()) print *,'no iau forcing',t1,IPD_Control%fhour,t2
          IAU_Data%in_interval=.false.
-      else 
+      else
          if (IPD_Control%iau_filter_increments) call setiauforcing(IPD_Control,IAU_Data,iau_state%wt)
-         if (is_master()) print *,'apply iau forcing',t1,IPD_Control%fhour,t2
+         if (is_master()) print *,'apply iau forcing t1,t,t2,filter wt=',t1,IPD_Control%fhour,t2,iau_state%wt/iau_state%wt_normfact
          IAU_Data%in_interval=.true.
       endif
       return
    endif
 
    if (nfiles > 1) then
-      t2=2
-      if (IPD_Control%fhour < IPD_Control%iaufhrs(1) .or. IPD_Control%fhour >= IPD_Control%iaufhrs(nfiles)) then
+      itnext=2
+      if (IPD_Control%fhour < t1 .or. IPD_Control%fhour >= t2) then
 !         if (is_master()) print *,'no iau forcing',IPD_Control%iaufhrs(1),IPD_Control%fhour,IPD_Control%iaufhrs(nfiles)
          IAU_Data%in_interval=.false.
-      else 
+      else
+         if (is_master()) print *,'apply iau forcing t1,t,t2,filter wt=',t1,IPD_Control%fhour,t2,iau_state%wt/iau_state%wt_normfact
          IAU_Data%in_interval=.true.
          do k=nfiles,1,-1
             if (IPD_Control%iaufhrs(k) > IPD_Control%fhour) then
-               t2=k
+               itnext=k
             endif
          enddo
-!         if (is_master()) print *,'t2=',t2
+!         if (is_master()) print *,'itnext=',itnext
          if (IPD_Control%fhour >= iau_state%hr2) then ! need to read in next increment file
             iau_state%hr1=iau_state%hr2
-            iau_state%hr2=IPD_Control%iaufhrs(t2)
+            iau_state%hr2=IPD_Control%iaufhrs(itnext)
             iau_state%inc1=iau_state%inc2
-            if (is_master()) print *,'reading next increment file',trim(IPD_Control%iau_inc_files(t2))
-            call read_iau_forcing(IPD_Control,iau_state%inc2,'INPUT/'//trim(IPD_Control%iau_inc_files(t2)))
+            if (is_master()) print *,'reading next increment file',trim(IPD_Control%iau_inc_files(itnext))
+            call read_iau_forcing(IPD_Control,iau_state%inc2,'INPUT/'//trim(IPD_Control%iau_inc_files(itnext)))
          endif
          call updateiauforcing(IPD_Control,IAU_Data,iau_state%wt)
       endif
@@ -373,13 +380,13 @@ subroutine getiauforcing(IPD_Control,IAU_Data)
  end subroutine getiauforcing
 
 subroutine updateiauforcing(IPD_Control,IAU_Data,wt)
-      
-   implicit none 
+
+   implicit none
    type (IPD_control_type),        intent(in) :: IPD_Control
    type(IAU_external_data_type),  intent(inout) :: IAU_Data
    real(kind_phys) delt,wt
    integer i,j,k,l
-  
+
 !   if (is_master()) print *,'in updateiauforcing',nfiles,IPD_Control%iaufhrs(1:nfiles)
    delt = (iau_state%hr2-(IPD_Control%fhour))/(IAU_state%hr2-IAU_state%hr1)
    do j = js,je
@@ -400,8 +407,8 @@ subroutine updateiauforcing(IPD_Control,IAU_Data,wt)
 
 
  subroutine setiauforcing(IPD_Control,IAU_Data,wt)
-      
- implicit none 
+
+ implicit none
  type (IPD_control_type),        intent(in) :: IPD_Control
  type(IAU_external_data_type),  intent(inout) :: IAU_Data
  real(kind_phys) delt, dt,wt
@@ -427,7 +434,7 @@ subroutine updateiauforcing(IPD_Control,IAU_Data,wt)
 
 subroutine read_iau_forcing(IPD_Control,increments,fname)
     type (IPD_control_type), intent(in) :: IPD_Control
-    type(iau_internal_data_type), intent(inout):: increments  
+    type(iau_internal_data_type), intent(inout):: increments
     character(len=*),  intent(in) :: fname
 !locals
     real, dimension(:,:,:), allocatable:: u_inc, v_inc
@@ -450,7 +457,7 @@ subroutine read_iau_forcing(IPD_Control,increments,fname)
 
     npz = IPD_Control%levs
 
-    if( file_exist(fname) ) then
+    if( file_exists(fname) ) then
       call open_ncfile( fname, ncid )        ! open the file
     else
       call mpp_error(FATAL,'==> Error in read_iau_forcing: Expected file '&
@@ -462,7 +469,7 @@ subroutine read_iau_forcing(IPD_Control,increments,fname)
     do j=js,je
       do i=is,ie
           j1 = jdc(i,j)
-        jbeg = min(jbeg, j1) 
+        jbeg = min(jbeg, j1)
         jend = max(jend, j1+1)
       enddo
     enddo
