@@ -58,7 +58,7 @@ CONTAINS
         INTEGER,           INTENT(IN)    :: isco,ieco,jsco,jeco
         INTEGER,           INTENT(INOUT) :: nlevs
         real,              INTENT(IN)    :: missing_value
-        INTEGER,           INTENT(OUT)   :: istatus
+        INTEGER,           INTENT(INOUT)   :: istatus
 
         INTEGER :: i, j
 

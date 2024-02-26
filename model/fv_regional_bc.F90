@@ -4117,7 +4117,7 @@ subroutine remap_scalar_nggps_regional_bc(Atm                         &
                                                                ,pt
 !
       real,dimension(bd%isd:,bd%jsd:,1:),intent(out) :: w
-      real,dimension(bd%is:,bd%js:,1:),intent(out) :: delz
+      real,dimension(bd%is:,bd%js:,1:),intent(inout) :: delz
 #ifdef USE_COND
       real,dimension(bd%isd:,bd%jsd:,1:),intent(out) :: q_con
 #endif
@@ -4424,7 +4424,7 @@ subroutine remap_scalar_nggps_regional_bc(Atm                         &
 !---------------------
 !
       integer :: i1,i2,j1,j2                                             !<-- Horizontal limits of region updated.
-      integer :: i_bc,j_bc                                               !<-- Innermost bndry index (anchor point for blending)
+      integer(kind=8) :: i_bc,j_bc                                               !<-- Innermost bndry index (anchor point for blending)
       integer :: i1_blend,i2_blend,j1_blend,j2_blend                     !<-- Limits of updated blending region.
       integer :: lbnd1,ubnd1,lbnd2,ubnd2                                 !<-- Horizontal limits of BC update arrays.
       integer :: iq                                                      !<-- Tracer index
@@ -4838,8 +4838,9 @@ subroutine remap_scalar_nggps_regional_bc(Atm                         &
 !
       integer,intent(in) :: lbnd1,ubnd1,lbnd2,ubnd2                      !<-- Index limits of the BC arrays.
 !
+      integer(kind=8),intent(in) :: i_bc,j_bc
       integer,intent(in) :: i1,i2,j1,j2                               &  !<-- Index limits of the updated boundary region.
-                           ,i_bc,j_bc                                 &  !<-- Innermost bndry indices (anchor pts for blending)
+!                           ,i_bc,j_bc                                 &  !<-- Innermost bndry indices (anchor pts for blending)
                            ,i1_blend,i2_blend,j1_blend,j2_blend       &  !<-- Index limits of the updated blending region.
                            ,nside
 !

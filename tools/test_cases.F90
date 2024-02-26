@@ -5475,7 +5475,7 @@ end subroutine terminator_tracers
  real, intent(inout), dimension(km+1):: ak, bk
  real, intent(inout), dimension(is:ie,js:je,km):: pt
  real, intent(inout), dimension(is:,js:,1:) :: delz
- real, intent(out), dimension(is:ie,js:je,km+1):: pk
+ real, intent(inout), dimension(is:ie,js:je,km+1):: pk
 ! pt is FV's cp*thelta_v
  real, intent(inout), dimension(is-1:ie+1,km+1,js-1:je+1):: pe
 ! Local
@@ -5664,7 +5664,7 @@ end subroutine terminator_tracers
  integer, intent(in):: km
  real, intent(in):: ps     ! surface pressure (Pa)
  real, intent(in), dimension(km):: pk1
- real, intent(out), dimension(km):: tp, qp
+ real, intent(inout), dimension(km):: tp, qp
 ! Local:
  integer, parameter:: ns = 401
  integer, parameter:: nx = 3
