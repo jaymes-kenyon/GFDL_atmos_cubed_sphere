@@ -2427,13 +2427,13 @@ module fv_nwp_nudge_mod
       enddo
 
       call compute_slp(is, ie, js, je, tm, ps, phis(is:ie,js:je), slp)
-
+123   continue
     if ( r_vor < 30.E3 .or. p_env<900.E2 ) then
 
 ! Compute r_vor & p_env
          r_vor = r_min + (slp_env-slp_o)/25.E2*r_inc
 
-123   continue
+!123   continue
       p_count = 0.
         p_sum = 0.
         a_sum = 0.
